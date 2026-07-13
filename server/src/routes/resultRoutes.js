@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { evaluate, syncAlert } from '../evaluation.js';
+import { isDayLocked, sampleDay, LOCKED_ERROR } from '../locks.js';
 
 const router = Router();
 
@@ -56,6 +57,7 @@ router.get('/:id', (req, res) => {
 router.post('/', (req, res) => {
   const { error, sample, spec, num } = validate(req.body);
   if (error) return res.status(400).json({ error });
+  if (isDayLocked(sampleDay(sample.received_at))) return res.status(403).json(LOCKED_ERROR);
   const evaluation = evaluate(spec, num);
   const info = db
     .prepare('INSERT INTO results (sample_id, specification_id, value, status, notes, analyzed_by) VALUES (?, ?, ?, ?, ?, ?)')
@@ -72,6 +74,7 @@ router.put('/:id', (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Resultado no encontrado' });
   const { error, sample, spec, num } = validate(req.body);
   if (error) return res.status(400).json({ error });
+  if (isDayLocked(sampleDay(sample.received_at))) return res.status(403).json(LOCKED_ERROR);
   const evaluation = evaluate(spec, num);
   db.prepare('UPDATE results SET sample_id = ?, specification_id = ?, value = ?, status = ?, notes = ? WHERE id = ?').run(
     sample.id,
@@ -86,8 +89,12 @@ router.put('/:id', (req, res) => {
 });
 
 router.delete('/:id', (req, res) => {
-  const info = db.prepare('DELETE FROM results WHERE id = ?').run(req.params.id);
-  if (info.changes === 0) return res.status(404).json({ error: 'Resultado no encontrado' });
+  const existing = db
+    .prepare('SELECT r.id, s.received_at FROM results r JOIN samples s ON s.id = r.sample_id WHERE r.id = ?')
+    .get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Resultado no encontrado' });
+  if (isDayLocked(sampleDay(existing.received_at))) return res.status(403).json(LOCKED_ERROR);
+  db.prepare('DELETE FROM results WHERE id = ?').run(req.params.id);
   res.status(204).end();
 });
 

@@ -1,7 +1,11 @@
 import { Router } from 'express';
 import db from '../db.js';
+import { requireAdmin } from '../auth.js';
 
 const router = Router();
+
+// Reading is open to any authenticated user; changes are admin-only
+router.use((req, res, next) => (req.method === 'GET' ? next() : requireAdmin(req, res, next)));
 
 const SPEC_QUERY = `
   SELECT sp.*, p.name AS product_name

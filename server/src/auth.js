@@ -8,6 +8,13 @@ export function signToken(user) {
   });
 }
 
+export function requireAdmin(req, res, next) {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Solo un administrador puede hacer esto' });
+  }
+  next();
+}
+
 export function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;

@@ -8,6 +8,7 @@ import SampleDetail from './pages/SampleDetail.jsx';
 import Products from './pages/Products.jsx';
 import ProductDetail from './pages/ProductDetail.jsx';
 import Alerts from './pages/Alerts.jsx';
+import Lot from './pages/Lot.jsx';
 
 const ICONS = {
   daily: (
@@ -94,10 +95,51 @@ function ChangePasswordModal({ onClose }) {
   );
 }
 
-function Layout({ user, onLogout, children }) {
+function Layout({ user, onLogout, theme, onToggleTheme, children }) {
   const [openAlerts, setOpenAlerts] = useState(0);
   const [showPwd, setShowPwd] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('qc_nav_collapsed') === '1');
+  const [lotQuery, setLotQuery] = useState('');
   const location = useLocation();
+  const navigate = useNavigate();
+
+  async function searchLot(e) {
+    e.preventDefault();
+    const q = lotQuery.trim();
+    if (!q) return;
+    try {
+      const lot = await api(`/lots/${encodeURIComponent(q)}`);
+      const day = lot.samples[0].received_at.slice(0, 10);
+      navigate(`/?date=${day}&lot=${encodeURIComponent(lot.batch)}`);
+      setLotQuery('');
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  function toggleNav() {
+    setCollapsed((c) => {
+      localStorage.setItem('qc_nav_collapsed', c ? '0' : '1');
+      return !c;
+    });
+  }
+
+  async function downloadBackup() {
+    try {
+      const res = await fetch('/api/backup', { headers: { Authorization: `Bearer ${getToken()}` } });
+      if (!res.ok) throw new Error('No se pudo generar la copia');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download =
+        res.headers.get('content-disposition')?.match(/filename="?([^";]+)/)?.[1] || 'qonforma-backup.db';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(e.message);
+    }
+  }
 
   useEffect(() => {
     api('/alerts?status=open')
@@ -106,8 +148,17 @@ function Layout({ user, onLogout, children }) {
   }, [location.pathname]);
 
   return (
-    <div className="layout">
-      <aside className="sidebar">
+    <div className={`layout ${collapsed ? 'nav-collapsed' : ''}`}>
+      <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+        <button
+          className="nav-toggle"
+          onClick={toggleNav}
+          title={collapsed ? 'Expandir menú' : 'Plegar menú'}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 6l-6 6 6 6" />
+          </svg>
+        </button>
         <div className="brand">
           <span className="brand-mark">Q</span>
           <div className="brand-block">
@@ -115,27 +166,68 @@ function Layout({ user, onLogout, children }) {
             <span className="brand-sub">Control de calidad</span>
           </div>
         </div>
+        <form className="side-search" onSubmit={searchLot} title="Buscar un lote y abrir su ficha">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M21 21l-4.3-4.3" />
+          </svg>
+          <input
+            placeholder="Buscar lote…"
+            value={lotQuery}
+            onChange={(e) => setLotQuery(e.target.value)}
+          />
+        </form>
         <nav>
           <span className="nav-section">Trabajo</span>
-          <NavLink to="/" end>
+          <NavLink to="/" end title="Registro diario">
             {ICONS.daily}
             <span>Registro diario</span>
           </NavLink>
-          <NavLink to="/alerts">
+          <NavLink to="/alerts" title="Alertas">
             {ICONS.alerts}
             <span>Alertas</span>
             {openAlerts > 0 && <span className="nav-badge">{openAlerts}</span>}
           </NavLink>
           <span className="nav-section">Maestros</span>
-          <NavLink to="/products">
+          <NavLink to="/products" title="Productos">
             {ICONS.products}
             <span>Productos</span>
           </NavLink>
-          <NavLink to="/samples">
+          <NavLink to="/samples" title="Muestras">
             {ICONS.samples}
             <span>Muestras</span>
           </NavLink>
         </nav>
+        <button
+          className="theme-toggle"
+          onClick={onToggleTheme}
+          title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+        >
+          {theme === 'dark' ? (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="4.5" />
+              <path d="M12 2v2.5M12 19.5V22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2 12h2.5M19.5 12H22M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+            </svg>
+          )}
+          <span>{theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}</span>
+        </button>
+        {user?.role === 'admin' && (
+          <button
+            className="theme-toggle"
+            onClick={downloadBackup}
+            title="Descargar una copia de seguridad de la base de datos"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <ellipse cx="12" cy="5" rx="8" ry="3" />
+              <path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
+            </svg>
+            <span>Copia de seguridad</span>
+          </button>
+        )}
         <div className="sidebar-footer">
           <div className="user-avatar">{(user?.username || '?')[0].toUpperCase()}</div>
           <div className="user-meta">
@@ -153,8 +245,18 @@ function Layout({ user, onLogout, children }) {
 
 export default function App() {
   const [user, setUser] = useState(getStoredUser());
+  const [theme, setTheme] = useState(() => localStorage.getItem('qc_theme') || 'light');
   const navigate = useNavigate();
   const authed = Boolean(getToken()) && user;
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('qc_theme', theme);
+  }, [theme]);
+
+  function toggleTheme() {
+    setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+  }
 
   function handleLogout() {
     clearSession();
@@ -172,7 +274,7 @@ export default function App() {
   }
 
   return (
-    <Layout user={user} onLogout={handleLogout}>
+    <Layout user={user} onLogout={handleLogout} theme={theme} onToggleTheme={toggleTheme}>
       <Routes>
         <Route path="/" element={<DailyLog />} />
         <Route path="/samples" element={<Samples />} />
@@ -180,6 +282,7 @@ export default function App() {
         <Route path="/products" element={<Products />} />
         <Route path="/products/:id" element={<ProductDetail />} />
         <Route path="/alerts" element={<Alerts />} />
+        <Route path="/lots/:batch" element={<Lot />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

@@ -1,7 +1,11 @@
 import { Router } from 'express';
 import db from '../db.js';
+import { requireAdmin } from '../auth.js';
 
 const router = Router();
+
+// Reading is open to any authenticated user; changes are admin-only
+router.use((req, res, next) => (req.method === 'GET' ? next() : requireAdmin(req, res, next)));
 
 const PRODUCT_QUERY = `
   SELECT p.*,
@@ -33,6 +37,19 @@ function conflictMessage(e) {
 
 router.get('/', (req, res) => {
   res.json(db.prepare(PRODUCT_QUERY + ' ORDER BY p.name').all());
+});
+
+// Every result of this product ordered in time, for trend charts
+router.get('/:id/trends', (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT r.specification_id, r.value, r.status, s.received_at AS analyzed_at, s.batch
+       FROM results r JOIN samples s ON s.id = r.sample_id
+       WHERE s.product_id = ?
+       ORDER BY s.received_at, r.id`
+    )
+    .all(req.params.id);
+  res.json(rows);
 });
 
 router.get('/:id', (req, res) => {

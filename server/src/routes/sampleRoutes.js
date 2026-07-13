@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { evaluate, syncAlert } from '../evaluation.js';
+import { isDayLocked, sampleDay, LOCKED_ERROR } from '../locks.js';
 
 const router = Router();
 
@@ -102,6 +103,8 @@ router.get('/:id', (req, res) => {
 router.post('/', (req, res) => {
   const { error, data } = validate(req.body, { requireCode: false });
   if (error) return res.status(400).json({ error });
+  const targetDay = data.received_at ? sampleDay(data.received_at) : new Date().toISOString().slice(0, 10);
+  if (isDayLocked(targetDay)) return res.status(403).json(LOCKED_ERROR);
   if (!data.code) data.code = generateCode(data.received_at);
   try {
     const info = db
@@ -124,6 +127,8 @@ router.put('/:id', (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Muestra no encontrada' });
   const { error, data } = validate(req.body);
   if (error) return res.status(400).json({ error });
+  if (isDayLocked(sampleDay(existing.received_at))) return res.status(403).json(LOCKED_ERROR);
+  if (data.received_at && isDayLocked(sampleDay(data.received_at))) return res.status(403).json(LOCKED_ERROR);
   try {
     db.prepare(
       'UPDATE samples SET code = ?, container = ?, product_id = ?, batch = ?, expiry_date = ?, line = ?, description = ?, status = ?, received_at = COALESCE(?, received_at) WHERE id = ?'
@@ -164,8 +169,10 @@ router.put('/:id', (req, res) => {
 });
 
 router.delete('/:id', (req, res) => {
-  const info = db.prepare('DELETE FROM samples WHERE id = ?').run(req.params.id);
-  if (info.changes === 0) return res.status(404).json({ error: 'Muestra no encontrada' });
+  const existing = db.prepare('SELECT * FROM samples WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Muestra no encontrada' });
+  if (isDayLocked(sampleDay(existing.received_at))) return res.status(403).json(LOCKED_ERROR);
+  db.prepare('DELETE FROM samples WHERE id = ?').run(req.params.id);
   res.status(204).end();
 });
 

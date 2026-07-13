@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../api.js';
+import { api, getStoredUser } from '../api.js';
+import { productColor } from '../format.js';
 
 const EMPTY = { code: '', name: '', description: '' };
 
@@ -10,6 +11,7 @@ export default function Products() {
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState('');
+  const isAdmin = getStoredUser()?.role === 'admin';
 
   async function load() {
     setProducts(await api('/products'));
@@ -66,7 +68,7 @@ export default function Products() {
           <h1>Productos</h1>
           <p className="muted page-sub">Catálogo de artículos y sus especificaciones de análisis</p>
         </div>
-        <button className="btn btn-primary" onClick={startCreate}>+ Crear producto</button>
+        {isAdmin && <button className="btn btn-primary" onClick={startCreate}>+ Crear producto</button>}
       </div>
 
       {error && <div className="alert-error">{error}</div>}
@@ -120,14 +122,25 @@ export default function Products() {
           {products.map((p) => (
             <tr key={p.id}>
               <td>{p.code || '—'}</td>
-              <td><Link to={`/products/${p.id}`}><strong>{p.name}</strong></Link></td>
+              <td>
+                <Link to={`/products/${p.id}`} className="prod-cell">
+                  <span className="prod-avatar prod-avatar-sm" style={{ background: productColor(p.name) }}>
+                    {p.name[0].toUpperCase()}
+                  </span>
+                  <strong>{p.name}</strong>
+                </Link>
+              </td>
               <td>{p.description || '—'}</td>
               <td>{p.spec_count}</td>
               <td>{p.sample_count}</td>
               <td className="row-actions">
                 <Link className="btn btn-small" to={`/products/${p.id}`}>Especificaciones</Link>
-                <button className="btn btn-small" onClick={() => startEdit(p)}>Editar</button>
-                <button className="btn btn-small btn-danger" onClick={() => handleDelete(p)}>Eliminar</button>
+                {isAdmin && (
+                  <>
+                    <button className="btn btn-small" onClick={() => startEdit(p)}>Editar</button>
+                    <button className="btn btn-small btn-danger" onClick={() => handleDelete(p)}>Eliminar</button>
+                  </>
+                )}
               </td>
             </tr>
           ))}

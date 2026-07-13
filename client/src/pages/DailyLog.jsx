@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { api } from '../api.js';
-import { productLabel } from '../format.js';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { api, getStoredUser } from '../api.js';
+import { productLabel, productColor } from '../format.js';
 
 function todayLocal() {
   return new Date().toLocaleDateString('sv'); // YYYY-MM-DD
@@ -29,6 +29,39 @@ export default function DailyLog() {
   const [extraLines, setExtraLines] = useState([]); // lines created this session with no samples yet
   const [lotSearch, setLotSearch] = useState('');
   const [flashKey, setFlashKey] = useState(''); // lot block to scroll to and highlight
+  const [view, setView] = useState('days'); // 'days' (landing) | 'sheet'
+  const [days, setDays] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [pendingLot, setPendingLot] = useState('');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    openDays();
+  }, []);
+
+  // Deep link from the sidebar lot search: /?date=YYYY-MM-DD&lot=XXXX
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const d = params.get('date');
+    if (!d) return;
+    const lot = params.get('lot');
+    setDate(d);
+    setView('sheet');
+    if (lot) setPendingLot(lot);
+    navigate('/', { replace: true }); // clean the URL
+  }, [location.search]);
+
+  // Once the sheet is loaded, jump to the searched lot's line and highlight it
+  useEffect(() => {
+    if (!pendingLot || !data) return;
+    const group = groups.find((g) => g.batch === pendingLot);
+    if (group) {
+      setSelectedLine(group.samples[0]?.line || '');
+      setFlashKey(group.key);
+    }
+    setPendingLot('');
+  }, [pendingLot, data]);
 
   async function load() {
     const d = await api(`/daily?date=${date}`);
@@ -89,6 +122,106 @@ export default function DailyLog() {
   const visibleGroups = groups.filter((g) => (g.samples[0]?.line || '') === activeLine);
   const visibleSamples = visibleGroups.flatMap((g) => g.samples);
 
+  async function toggleLock() {
+    if (!data) return;
+    if (data.locked) {
+      if (!confirm('¿Reabrir este día para edición?')) return;
+      await withSaving(async () => {
+        await api(`/daily/lock/${date}`, { method: 'DELETE' });
+        await load();
+      });
+    } else {
+      if (!confirm('¿Cerrar el día? La hoja quedará en solo lectura (solo un administrador puede reabrirla).')) return;
+      await withSaving(async () => {
+        await api('/daily/lock', { method: 'POST', body: { date } });
+        await load();
+      });
+    }
+  }
+
+  // Builds a CSV of the whole day (all lines and lots) and downloads it
+  function exportCsv() {
+    if (!data) return;
+    const productIdsInDay = new Set(data.samples.map((s) => s.product_id));
+    const cols = [];
+    for (const p of data.products) {
+      if (!productIdsInDay.has(p.id)) continue;
+      for (const sp of p.specifications) {
+        if (!cols.some((c) => c.parameter === sp.parameter)) {
+          cols.push({ parameter: sp.parameter, label: sp.unit ? `${sp.parameter} (${sp.unit})` : sp.parameter });
+        }
+      }
+    }
+    const esc = (v) => {
+      const s = String(v ?? '');
+      return /[";\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
+    };
+    const num = (v) => String(v).replace('.', ',');
+    const rows = [
+      ['Fecha', 'Línea', 'Producto', 'Código artículo', 'Lote', 'Caducidad', 'Hora', 'Envase', ...cols.map((c) => c.label), 'Estado'],
+    ];
+    for (const g of groups) {
+      const product = productsById[g.product_id];
+      for (const s of g.samples) {
+        const values = cols.map((c) => {
+          const sp = product?.specifications.find((x) => x.parameter === c.parameter);
+          const r = sp ? s.results[sp.id] : null;
+          return r ? num(r.value) : '';
+        });
+        const resultList = Object.values(s.results);
+        const hasOut = resultList.some((r) => r.status === 'out_of_spec');
+        rows.push([
+          date,
+          s.line || '',
+          product?.name || '',
+          product?.code || '',
+          s.batch,
+          s.expiry_date,
+          s.received_at.slice(11, 16),
+          s.container,
+          ...values,
+          hasOut ? 'FUERA DE ESPECIFICACIÓN' : resultList.length > 0 ? 'Conforme' : '',
+        ]);
+      }
+    }
+    const csv = '﻿' + rows.map((r) => r.map(esc).join(';')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `qonforma_${date}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function openDays() {
+    setView('days');
+    setDays(null);
+    try {
+      setDays(await api('/daily/days'));
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  function pickDay(day) {
+    setDate(day);
+    setView('sheet');
+  }
+
+  const monthGroups = useMemo(() => {
+    if (!days) return [];
+    const map = new Map();
+    for (const d of days) {
+      const label = new Date(`${d.day}T12:00:00`).toLocaleDateString('es-ES', {
+        month: 'long',
+        year: 'numeric',
+      });
+      if (!map.has(label)) map.set(label, []);
+      map.get(label).push(d);
+    }
+    return [...map.entries()];
+  }, [days]);
+
   // Finds a lot anywhere in the day, jumps to its line tab and highlights its block
   function searchLot(e) {
     e.preventDefault();
@@ -143,6 +276,7 @@ export default function DailyLog() {
   }
 
   async function addSample(productId, batch, container, expiry, line) {
+    if (data?.locked) return;
     await withSaving(async () => {
       await api('/samples', {
         method: 'POST',
@@ -160,6 +294,7 @@ export default function DailyLog() {
   }
 
   async function deleteRow(sample) {
+    if (data?.locked) return;
     if (!confirm(`¿Eliminar la muestra del envase ${sample.container || '?'} (lote ${sample.batch || 'sin lote'}) con todos sus resultados?`)) return;
     await withSaving(async () => {
       await api(`/samples/${sample.id}`, { method: 'DELETE' });
@@ -182,8 +317,18 @@ export default function DailyLog() {
   }
 
   async function saveContainer(sample, raw) {
+    if (data?.locked) return;
     const value = raw.trim();
     if (value === sample.container) return;
+    const duplicate =
+      value !== '' &&
+      data.samples.some(
+        (s) => s.id !== sample.id && s.product_id === sample.product_id && s.batch === sample.batch && s.container === value
+      );
+    if (duplicate && !confirm(`El envase ${value} ya existe en este lote. ¿Guardarlo igualmente?`)) {
+      await load(); // restore the previous value in the cell
+      return;
+    }
     await withSaving(async () => {
       const updated = await api(`/samples/${sample.id}`, {
         method: 'PUT',
@@ -194,6 +339,7 @@ export default function DailyLog() {
   }
 
   async function saveTime(sample, raw) {
+    if (data?.locked) return;
     if (!raw || raw === sample.received_at.slice(11, 16)) return;
     await withSaving(async () => {
       await api(`/samples/${sample.id}`, {
@@ -205,6 +351,7 @@ export default function DailyLog() {
   }
 
   async function renameBatch(group, raw) {
+    if (data?.locked) return;
     const value = raw.trim();
     if (value === group.batch) return;
     await withSaving(async () => {
@@ -216,6 +363,7 @@ export default function DailyLog() {
   }
 
   async function changeGroupProduct(group, newPid) {
+    if (data?.locked) return;
     const pid = Number(newPid);
     if (pid === group.product_id) return;
     const hasResults = group.samples.some((s) => Object.keys(s.results).length > 0);
@@ -237,6 +385,7 @@ export default function DailyLog() {
 
   // Expiry belongs to the whole lot: updating it writes it to every sample of the group
   async function saveGroupExpiry(group, raw) {
+    if (data?.locked) return;
     if (raw === (group.samples[0]?.expiry_date || '')) return;
     await withSaving(async () => {
       for (const s of group.samples) {
@@ -248,6 +397,7 @@ export default function DailyLog() {
 
   // Renames the active line: rewrites the line on every sample of the day in it
   async function renameLine() {
+    if (data?.locked) return;
     const name = prompt(
       activeLine ? 'Nuevo nombre de la línea' : 'Asignar estas muestras a la línea…',
       activeLine
@@ -272,6 +422,7 @@ export default function DailyLog() {
 
   // Deletes a whole lot: every sample of the group with its results and alerts
   async function deleteGroup(group) {
+    if (data?.locked) return;
     const label = group.batch ? `el lote ${group.batch}` : 'este lote sin nombre';
     if (
       !confirm(
@@ -289,6 +440,7 @@ export default function DailyLog() {
   }
 
   async function deleteLine() {
+    if (data?.locked) return;
     const label = activeLine ? `la línea ${activeLine}` : 'la pestaña «Sin línea»';
     if (visibleSamples.length === 0) {
       setExtraLines((prev) => prev.filter((l) => l !== activeLine));
@@ -313,6 +465,7 @@ export default function DailyLog() {
   }
 
   async function saveCell(sample, spec, raw) {
+    if (data?.locked) return;
     const existing = sample.results[spec.id];
     const value = raw.trim();
 
@@ -358,6 +511,9 @@ export default function DailyLog() {
     if (next) next.focus();
   }
 
+  const locked = Boolean(data?.locked);
+  const isAdmin = getStoredUser()?.role === 'admin';
+
   const outOfSpecCount = visibleSamples.reduce(
     (acc, s) => acc + Object.values(s.results).filter((r) => r.status === 'out_of_spec').length,
     0
@@ -397,20 +553,95 @@ export default function DailyLog() {
           <span className={`save-state ${saveState}`}>
             {saveState === 'saving' ? 'Guardando…' : saveState === 'saved' ? '✔ Guardado' : ''}
           </span>
-          <div className="date-nav">
-            <button className="btn" title="Día anterior" onClick={() => setDate(addDays(date, -1))}>‹</button>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            <button className="btn" title="Día siguiente" onClick={() => setDate(addDays(date, 1))}>›</button>
-            {date !== todayLocal() && (
-              <button className="btn" onClick={() => setDate(todayLocal())}>Hoy</button>
+          <button
+            className="btn btn-days"
+            onClick={() => (view === 'days' ? pickDay(todayLocal()) : openDays())}
+            title={view === 'days' ? 'Abrir la hoja de hoy' : 'Volver al listado de días'}
+          >
+            {view === 'days' ? (
+              <>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="17" rx="2" />
+                  <path d="M3 9h18M8 2.5V6M16 2.5V6" />
+                </svg>
+                Abrir hoja de hoy
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                </svg>
+                Días
+              </>
             )}
-          </div>
+          </button>
+          {view === 'sheet' && data && (
+            <button className="btn" onClick={exportCsv} title="Exportar la hoja completa del día a CSV (Excel)">
+              Exportar
+            </button>
+          )}
+          {view === 'sheet' && (
+            <div className="date-nav">
+              <button className="btn" title="Día anterior" onClick={() => setDate(addDays(date, -1))}>‹</button>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              <button className="btn" title="Día siguiente" onClick={() => setDate(addDays(date, 1))}>›</button>
+              {date !== todayLocal() && (
+                <button className="btn" onClick={() => setDate(todayLocal())}>Hoy</button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {error && <div className="alert-error">{error}</div>}
 
-      {!data ? (
+      {view === 'sheet' && locked && (
+        <div className="locked-banner">
+          🔒 Día cerrado{data.locked_by_name ? ` por ${data.locked_by_name}` : ''} — la hoja es de solo lectura.
+        </div>
+      )}
+
+      {view === 'days' ? (
+        !days ? (
+          <p className="muted">Cargando…</p>
+        ) : days.length === 0 ? (
+          <div className="empty-state card">
+            <h2>Aún no hay días con registros</h2>
+            <p className="muted">Pulsa «Abrir hoja de hoy» y añade el primer producto del día.</p>
+          </div>
+        ) : (
+          monthGroups.map(([month, list]) => (
+            <div key={month}>
+              <h2 className="month-heading">{month}</h2>
+              <div className="days-grid">
+                {list.map((d) => {
+                  const dt = new Date(`${d.day}T12:00:00`);
+                  return (
+                    <button
+                      key={d.day}
+                      className={`day-card ${d.day === date ? 'active' : ''}`}
+                      onClick={() => pickDay(d.day)}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round">
+                        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                      </svg>
+                      <span className="day-num">{dt.getDate()}</span>
+                      <span className="day-week">
+                        {dt.toLocaleDateString('es-ES', { weekday: 'long' })}
+                        {d.day === todayLocal() ? ' · hoy' : ''}
+                      </span>
+                      <span className="day-meta">
+                        {d.samples} muestra{d.samples !== 1 ? 's' : ''} · {d.lots} lote{d.lots !== 1 ? 's' : ''}
+                        {d.out_of_spec > 0 && <span className="day-out">⚠ {d.out_of_spec}</span>}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))
+        )
+      ) : !data ? (
         <p className="muted">Cargando…</p>
       ) : (
         <>
@@ -447,6 +678,7 @@ export default function DailyLog() {
             <h2>{activeLine ? `Línea ${activeLine}` : 'Sin línea'}</h2>
             <button
               className="btn btn-small"
+              disabled={locked}
               onClick={renameLine}
               title={activeLine ? 'Cambiar el nombre de la línea (se aplica a sus muestras del día)' : 'Asignar estas muestras a una línea'}
             >
@@ -454,6 +686,7 @@ export default function DailyLog() {
             </button>
             <button
               className="btn btn-small btn-danger"
+              disabled={locked}
               onClick={deleteLine}
               title={visibleSamples.length > 0 ? 'Elimina la línea con sus muestras del día' : 'Quitar esta línea'}
             >
@@ -470,43 +703,21 @@ export default function DailyLog() {
             )}
           </div>
 
-          <div className="new-lote-bar card">
-            <label>
-              Producto
-              <select value={newProductId} onChange={(e) => setNewProductId(e.target.value)}>
-                {data.products.map((p) => (
-                  <option key={p.id} value={p.id}>{productLabel(p)}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Lote
-              <input
-                placeholder="L-2026-001"
-                value={newBatch}
-                onChange={(e) => setNewBatch(e.target.value)}
-              />
-            </label>
-            <label>
-              Caducidad
-              <input type="date" value={newExpiry} onChange={(e) => setNewExpiry(e.target.value)} />
-            </label>
-            <button
-              className="btn btn-primary"
-              onClick={() => addSample(newProductId, newBatch.trim(), '1', newExpiry, activeLine)}
-              disabled={!newProductId}
-            >
-              + Añadir producto a {activeLine ? `línea ${activeLine}` : 'la hoja'}
-            </button>
-            <span className="muted new-lote-hint">
-              Para más muestras de un lote ya en marcha, usa «+ muestra» en su bloque.
-            </span>
-          </div>
+          {!locked && (
+            <div className="add-product-row">
+              <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
+                + Añadir producto
+              </button>
+              <span className="muted new-lote-hint">
+                Para más muestras de un lote ya en marcha, usa «+ muestra» en su bloque.
+              </span>
+            </div>
+          )}
 
           {visibleGroups.length === 0 ? (
             <div className="empty-state card">
               <h2>{activeLine ? `Nada en la línea ${activeLine} este día` : 'No hay muestras sin línea'}</h2>
-              <p className="muted">Elige producto y lote arriba para empezar a registrar en esta línea.</p>
+              <p className="muted">Pulsa «+ Añadir producto» para empezar a registrar en esta línea.</p>
             </div>
           ) : (
             visibleGroups.map((group) => {
@@ -523,9 +734,13 @@ export default function DailyLog() {
                   className={`group-card ${flashKey === group.key ? 'group-flash' : ''}`}
                 >
                   <header className="group-card-head">
+                    <span className="prod-avatar" style={{ background: productColor(product?.name) }}>
+                      {(product?.name || '?')[0].toUpperCase()}
+                    </span>
                     <select
                       className="group-product"
                       value={group.product_id}
+                      disabled={locked}
                       onChange={(e) => changeGroupProduct(group, e.target.value)}
                       title="Producto del lote (cambiarlo afecta a todas sus muestras)"
                     >
@@ -540,10 +755,23 @@ export default function DailyLog() {
                         className="group-batch"
                         defaultValue={group.batch}
                         placeholder="sin lote"
+                        disabled={locked}
                         onBlur={(e) => renameBatch(group, e.target.value)}
                         title="Lote (renombrarlo afecta a todas sus muestras)"
                       />
                     </span>
+                    {group.batch && (
+                      <Link
+                        className="btn btn-small btn-icon"
+                        to={`/lots/${encodeURIComponent(group.batch)}`}
+                        title="Ficha del lote: trazabilidad completa"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <path d="M14 2v6h6M9 13h6M9 17h6" />
+                        </svg>
+                      </Link>
+                    )}
                     <span className="lote-tag">
                       Cad.
                       <input
@@ -551,6 +779,7 @@ export default function DailyLog() {
                         type="date"
                         className="group-expiry"
                         defaultValue={group.samples[0]?.expiry_date || ''}
+                        disabled={locked}
                         onBlur={(e) => saveGroupExpiry(group, e.target.value)}
                         title="Fecha de caducidad del lote (se aplica a todas sus muestras)"
                       />
@@ -559,6 +788,7 @@ export default function DailyLog() {
                     <span className="group-spacer" />
                     <button
                       className="btn btn-small btn-add"
+                      disabled={locked}
                       onClick={() =>
                         addSample(
                           group.product_id,
@@ -574,6 +804,7 @@ export default function DailyLog() {
                     </button>
                     <button
                       className="btn btn-small btn-danger"
+                      disabled={locked}
                       onClick={() => deleteGroup(group)}
                       title="Eliminar el lote completo con sus muestras"
                     >
@@ -623,6 +854,7 @@ export default function DailyLog() {
                                     key={`${sample.id}-time-${sample.received_at}`}
                                     type="time"
                                     defaultValue={sample.received_at.slice(11, 16)}
+                                    disabled={locked}
                                     data-cell={`${r}:time`}
                                     onBlur={(e) => saveTime(sample, e.target.value)}
                                     onKeyDown={(e) => handleKeyDown(e, r, 'time')}
@@ -633,6 +865,7 @@ export default function DailyLog() {
                                     key={`${sample.id}-container-${sample.container}`}
                                     defaultValue={sample.container}
                                     placeholder="nº envase"
+                                    disabled={locked}
                                     data-cell={`${r}:container`}
                                     onBlur={(e) => saveContainer(sample, e.target.value)}
                                     onKeyDown={(e) => handleKeyDown(e, r, 'container')}
@@ -661,8 +894,9 @@ export default function DailyLog() {
                                         type="number"
                                         step="any"
                                         defaultValue={result?.value ?? ''}
+                                        disabled={locked}
                                         data-cell={`${r}:${sp.parameter}`}
-                                        title={out ? `Fuera de especificación (${range})` : range}
+                                        title={`${out ? `Fuera de especificación (${range})` : range}${result?.analyzed_by_name ? ` — registrado por ${result.analyzed_by_name}` : ''}`}
                                         onBlur={(e) => saveCell(sample, sp, e.target.value)}
                                         onKeyDown={(e) => handleKeyDown(e, r, sp.parameter)}
                                       />
@@ -685,6 +919,7 @@ export default function DailyLog() {
                                   <button
                                     className="btn btn-small btn-danger"
                                     title="Eliminar muestra"
+                                    disabled={locked}
                                     onClick={() => deleteRow(sample)}
                                   >
                                     ✕
@@ -735,7 +970,73 @@ export default function DailyLog() {
               una celda para ver su rango. Las celdas rojas están fuera de especificación y generan alerta.
             </p>
           )}
+
+          <div className="day-footer">
+            {data.locked ? (
+              isAdmin ? (
+                <button className="btn" onClick={toggleLock} title="Reabrir el día para edición">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="4" y="11" width="16" height="10" rx="2" />
+                    <path d="M8 11V7a4 4 0 0 1 7.9-.9" />
+                  </svg>
+                  Reabrir día
+                </button>
+              ) : (
+                <span className="muted">Día cerrado — solo un administrador puede reabrirlo.</span>
+              )
+            ) : (
+              <button className="btn btn-lock" onClick={toggleLock} title="Cerrar el día: la hoja queda en solo lectura">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="4" y="11" width="16" height="10" rx="2" />
+                  <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                </svg>
+                Cerrar día
+              </button>
+            )}
+          </div>
         </>
+      )}
+
+      {showAdd && (
+        <div className="modal-backdrop" onClick={() => setShowAdd(false)}>
+          <form
+            className="card modal"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setShowAdd(false);
+              await addSample(newProductId, newBatch.trim(), '1', newExpiry, activeLine);
+              setNewBatch('');
+              setNewExpiry('');
+            }}
+          >
+            <h2>Añadir producto a {activeLine ? `línea ${activeLine}` : 'la hoja'}</h2>
+            <label>
+              Producto
+              <select value={newProductId} onChange={(e) => setNewProductId(e.target.value)} autoFocus required>
+                {data?.products.map((p) => (
+                  <option key={p.id} value={p.id}>{productLabel(p)}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Lote
+              <input
+                placeholder="L-2026-001"
+                value={newBatch}
+                onChange={(e) => setNewBatch(e.target.value)}
+              />
+            </label>
+            <label>
+              Fecha de caducidad
+              <input type="date" value={newExpiry} onChange={(e) => setNewExpiry(e.target.value)} />
+            </label>
+            <div className="form-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setShowAdd(false)}>Cancelar</button>
+              <button className="btn btn-primary" disabled={!newProductId}>Añadir</button>
+            </div>
+          </form>
+        </div>
       )}
     </div>
   );

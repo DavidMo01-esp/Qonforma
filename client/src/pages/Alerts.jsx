@@ -15,6 +15,17 @@ export default function Alerts() {
     load().catch((e) => setError(e.message));
   }, [filter]);
 
+  async function resolveAlert(alert) {
+    const note = prompt('Acción correctiva / comentario (opcional):', '');
+    if (note === null) return; // cancelled
+    try {
+      await api(`/alerts/${alert.id}/resolve`, { method: 'PATCH', body: { note: note.trim() } });
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function act(alert, action) {
     try {
       await api(`/alerts/${alert.id}/${action}`, { method: 'PATCH' });
@@ -73,17 +84,26 @@ export default function Alerts() {
               </td>
               <td>{a.sample_product}</td>
               <td>
-                <Link to={`/samples/${a.sample_id}`} className="lot-link">
-                  {a.sample_batch || 'sin lote'}
-                </Link>
+                {a.sample_batch ? (
+                  <Link to={`/lots/${encodeURIComponent(a.sample_batch)}`} className="lot-link" title="Ficha del lote">
+                    {a.sample_batch}
+                  </Link>
+                ) : (
+                  <Link to={`/samples/${a.sample_id}`} className="lot-link">sin lote</Link>
+                )}
               </td>
               <td>{a.sample_container ? `nº ${a.sample_container}` : '—'}</td>
-              <td>{a.message}</td>
+              <td>
+                {a.message}
+                {a.resolution_note && (
+                  <div className="note-line">↳ {a.resolution_note}</div>
+                )}
+              </td>
               <td>{a.created_at}</td>
               <td>{a.resolved_at ? `${a.resolved_at} (${a.resolved_by_name || '?'})` : '—'}</td>
               <td className="row-actions">
                 {a.status === 'open' ? (
-                  <button className="btn btn-small btn-primary" onClick={() => act(a, 'resolve')}>Resolver</button>
+                  <button className="btn btn-small btn-primary" onClick={() => resolveAlert(a)}>Resolver</button>
                 ) : (
                   <button className="btn btn-small" onClick={() => act(a, 'reopen')}>Reabrir</button>
                 )}

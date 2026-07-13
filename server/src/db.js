@@ -72,7 +72,14 @@ CREATE TABLE IF NOT EXISTS alerts (
   status TEXT NOT NULL DEFAULT 'open',   -- open | resolved
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   resolved_at TEXT,
-  resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+  resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  resolution_note TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS day_locks (
+  day TEXT PRIMARY KEY,
+  locked_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  locked_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 `);
 
@@ -93,6 +100,11 @@ if (!sampleCols.some((c) => c.name === 'expiry_date')) {
 }
 if (!sampleCols.some((c) => c.name === 'line')) {
   db.exec("ALTER TABLE samples ADD COLUMN line TEXT NOT NULL DEFAULT ''");
+}
+
+// Migration: corrective-action note on resolved alerts
+if (!db.prepare('PRAGMA table_info(alerts)').all().some((c) => c.name === 'resolution_note')) {
+  db.exec("ALTER TABLE alerts ADD COLUMN resolution_note TEXT NOT NULL DEFAULT ''");
 }
 
 // Seed an admin user on first run. Credentials come from ADMIN_USER /

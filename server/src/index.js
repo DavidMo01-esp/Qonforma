@@ -1,7 +1,11 @@
 import express from 'express';
 import cors from 'cors';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import db from './db.js';
-import { requireAuth } from './auth.js';
+import { requireAuth, requireAdmin } from './auth.js';
+import lotRoutes from './routes/lotRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import productRoutes from './routes/productRoutes.js';
 import specRoutes from './routes/specRoutes.js';
@@ -21,6 +25,21 @@ app.use('/api/samples', requireAuth, sampleRoutes);
 app.use('/api/results', requireAuth, resultRoutes);
 app.use('/api/alerts', requireAuth, alertRoutes);
 app.use('/api/daily', requireAuth, dailyRoutes);
+app.use('/api/lots', requireAuth, lotRoutes);
+
+// Consistent snapshot of the SQLite database, downloadable by an admin
+app.get('/api/backup', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const stamp = new Date().toISOString().slice(0, 19).replaceAll(':', '-');
+    const file = path.join(os.tmpdir(), `qonforma-backup-${stamp}.db`);
+    await db.backup(file);
+    res.download(file, `qonforma-backup-${stamp}.db`, () => {
+      fs.unlink(file, () => {});
+    });
+  } catch (e) {
+    next(e);
+  }
+});
 
 app.use((req, res) => res.status(404).json({ error: 'Ruta no encontrada' }));
 

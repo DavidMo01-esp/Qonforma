@@ -31,9 +31,12 @@ router.get('/:id', (req, res) => {
 });
 
 router.patch('/:id/resolve', (req, res) => {
+  const note = (req.body?.note || '').trim();
   const info = db
-    .prepare("UPDATE alerts SET status = 'resolved', resolved_at = datetime('now'), resolved_by = ? WHERE id = ? AND status = 'open'")
-    .run(req.user.id, req.params.id);
+    .prepare(
+      "UPDATE alerts SET status = 'resolved', resolved_at = datetime('now'), resolved_by = ?, resolution_note = ? WHERE id = ? AND status = 'open'"
+    )
+    .run(req.user.id, note, req.params.id);
   if (info.changes === 0) return res.status(404).json({ error: 'Alerta no encontrada o ya resuelta' });
   res.json(db.prepare(ALERT_QUERY + ' WHERE a.id = ?').get(req.params.id));
 });
