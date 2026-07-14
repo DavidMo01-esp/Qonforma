@@ -716,7 +716,7 @@ input:focus, select:focus {
 .cell-out.lot-value { color: var(--danger); }
 
 /* Trend charts */
-.trend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1rem; }
+.trend-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: 1rem; }
 .trend-card { margin-bottom: 0; padding: 1rem 1.1rem; }
 .trend-head { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
 .trend-count { font-size: 0.8rem; margin-left: auto; }
@@ -1117,6 +1117,14 @@ input:focus, select:focus {
 .page-head h1 { margin: 0; }
 .page-sub { margin: 0.15rem 0 0; font-size: 0.86rem; }
 
+/* ---------- Touch devices: hover-revealed actions must be visible ---------- */
+@media (hover: none) {
+  .table .row-actions .btn,
+  .group-card-head .btn-danger,
+  .group-card-head .btn-icon,
+  .line-action { opacity: 1; }
+}
+
 /* ---------- Responsive: collapse sidebar to icons ---------- */
 @media (max-width: 920px) {
   .layout, .layout.nav-collapsed { padding-left: 66px; }
@@ -1135,6 +1143,48 @@ input:focus, select:focus {
   }
   .sidebar-footer { justify-content: center; }
   .content { padding: 1.2rem 1rem 3rem; }
+}
+
+/* ---------- Phones ---------- */
+@media (max-width: 640px) {
+  html { font-size: 14px; }
+  .content { padding: 1rem 0.65rem 4rem; }
+  h1 { font-size: 1.2rem; }
+
+  /* inputs at 16px so iOS doesn't zoom in when focusing */
+  input, select { font-size: 16px; }
+
+  .page-head, .daily-head { flex-direction: column; align-items: stretch; gap: 0.6rem; }
+  .daily-right { flex-wrap: wrap; justify-content: flex-start; }
+  .date-nav { flex: 1; }
+  .date-nav input[type='date'] { flex: 1; min-width: 0; }
+
+  .line-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+  .line-tab { white-space: nowrap; padding: 0.5rem 0.75rem; }
+  .lot-search { display: none; } /* on phones the sidebar search covers this */
+
+  .line-title { gap: 0.5rem; }
+  .line-title h2 { font-size: 1.05rem; }
+
+  .group-card-head { gap: 0.45rem; padding: 0.5rem 0.7rem; }
+  .group-product { max-width: 100%; font-size: 0.9rem; }
+  .group-batch { width: 105px; }
+
+  .table th, .table td { padding: 0.45rem 0.55rem; font-size: 0.85rem; }
+  .cell-input input { min-width: 64px; }
+  .col-prod, .col-lot { min-width: 110px; }
+
+  .form-grid { grid-template-columns: 1fr; }
+  .span-2 { grid-column: span 1; }
+  .filters { flex-direction: column; }
+  .filters input { max-width: none; }
+  .detail-card { grid-template-columns: 1fr; }
+
+  .days-grid { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 0.6rem; }
+  .day-card { padding: 0.75rem 0.8rem; }
+
+  .save-state { bottom: 0.8rem; right: 0.8rem; }
+  .modal { padding: 1.2rem 1rem; }
 }
 .alert-error {
   background: var(--danger-soft);
