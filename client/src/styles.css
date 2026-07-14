@@ -566,7 +566,8 @@ input:focus, select:focus {
 /* ---------- Daily sheet ---------- */
 .daily-head { align-items: flex-start; }
 .daily-head h1 { margin-bottom: 0.1rem; }
-.date-caption { margin: 0; text-transform: capitalize; font-size: 0.88rem; }
+.date-caption { margin: 0; font-size: 0.88rem; }
+.date-caption::first-letter { text-transform: uppercase; }
 
 .date-nav {
   display: flex;
@@ -736,11 +737,11 @@ input:focus, select:focus {
 .month-heading {
   font-size: 0.85rem;
   font-weight: 700;
-  text-transform: capitalize;
   letter-spacing: 0.05em;
   color: var(--muted);
   margin: 1.4rem 0 0.75rem;
 }
+.month-heading::first-letter { text-transform: uppercase; }
 .days-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -1129,6 +1130,9 @@ input:focus, select:focus {
 @media (max-width: 920px) {
   .layout, .layout.nav-collapsed { padding-left: 66px; }
   .sidebar { width: 66px; padding: 1rem 0.5rem; }
+  .nav-toggle { display: none; }
+  .theme-toggle { justify-content: center; padding: 0.6rem; }
+  .theme-toggle span { display: none; }
   .brand { justify-content: center; padding-left: 0; padding-right: 0; }
   .brand-block, .nav-section, .user-meta, .side-search { display: none; }
   .sidebar nav a { position: relative; justify-content: center; padding: 0.6rem; }
@@ -1156,8 +1160,8 @@ input:focus, select:focus {
 
   .page-head, .daily-head { flex-direction: column; align-items: stretch; gap: 0.6rem; }
   .daily-right { flex-wrap: wrap; justify-content: flex-start; }
-  .date-nav { flex: 1; }
-  .date-nav input[type='date'] { flex: 1; min-width: 0; }
+  .date-nav { flex: 1 1 240px; }
+  .date-nav input[type='date'] { flex: 1; min-width: 118px; }
 
   .line-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
   .line-tab { white-space: nowrap; padding: 0.5rem 0.75rem; }
