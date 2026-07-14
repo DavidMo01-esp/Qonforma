@@ -93,10 +93,7 @@ export default function Samples() {
   return (
     <div>
       <div className="page-head">
-        <div>
-          <h1>Muestras</h1>
-          <p className="muted page-sub">Histórico completo de muestras de todos los días</p>
-        </div>
+        <h1>Muestras</h1>
         <button className="btn btn-primary" onClick={startCreate}>+ Nueva muestra</button>
       </div>
 

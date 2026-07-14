@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: qonforma
+    runtime: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    healthCheckPath: /api/meta
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DEMO_MODE
+        value: "1"
+      - key: ADMIN_USER
+        value: demo
+      - key: ADMIN_PASSWORD
+        value: demo1234

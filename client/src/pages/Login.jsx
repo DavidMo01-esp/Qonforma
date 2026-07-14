@@ -1,9 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, saveSession } from '../api.js';
 
 export default function Login({ onLogin }) {
   const [mode, setMode] = useState('login');
+  const [isDemo, setIsDemo] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/meta')
+      .then((r) => r.json())
+      .then((d) => setIsDemo(Boolean(d.demo)))
+      .catch(() => {});
+  }, []);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -33,10 +41,16 @@ export default function Login({ onLogin }) {
     <div className="login-wrapper">
       <form className="card login-card" onSubmit={handleSubmit}>
         <div className="login-brand">
-          <span className="brand-mark">Q</span>
+          <img src="/icon.png" alt="QONFORMA" className="brand-mark brand-img" />
         </div>
         <h1>QONFORMA</h1>
         <p className="muted">{mode === 'login' ? 'Inicia sesión para continuar' : 'Crea una cuenta nueva'}</p>
+        {isDemo && (
+          <div className="demo-box">
+            <strong>Demo pública</strong> — entra con <code>demo</code> / <code>demo1234</code>
+            <span>Los datos son de ejemplo y se restablecen periódicamente.</span>
+          </div>
+        )}
         {error && <div className="alert-error">{error}</div>}
         <label>
           Usuario

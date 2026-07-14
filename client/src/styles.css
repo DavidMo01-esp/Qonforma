@@ -74,8 +74,7 @@ body {
   margin: 0;
   font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
   background:
-    radial-gradient(900px 500px at 88% -10%, rgba(59, 130, 246, 0.09), transparent 60%),
-    radial-gradient(750px 450px at -8% 105%, rgba(124, 58, 237, 0.07), transparent 60%),
+    radial-gradient(900px 500px at 88% -10%, rgba(59, 130, 246, 0.05), transparent 60%),
     var(--bg);
   background-attachment: fixed;
   color: var(--text);
@@ -217,6 +216,7 @@ a:hover { text-decoration: underline; }
   flex-shrink: 0;
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
 }
+.brand-img { object-fit: cover; background: none; padding: 0; }
 .brand-block { display: flex; flex-direction: column; line-height: 1.2; }
 .brand-text {
   font-weight: 800;
@@ -419,6 +419,25 @@ a:hover { text-decoration: underline; }
   animation: float 3s ease-in-out infinite;
 }
 .login-card h1 { margin: 0; text-align: center; font-size: 1.2rem; }
+.demo-box {
+  background: var(--primary-soft);
+  border: 1px solid var(--primary-border);
+  border-radius: 9px;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.86rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.demo-box code {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0 0.35rem;
+  font-size: 0.84rem;
+}
+.demo-box span { color: var(--muted); font-size: 0.78rem; }
 .login-card p { margin: 0; text-align: center; }
 
 /* ---------- Forms ---------- */
@@ -514,6 +533,10 @@ input:focus, select:focus {
 .table tbody tr:hover td { background: var(--hover); }
 .table tr:last-child td { border-bottom: none; }
 .row-actions { display: flex; gap: 0.4rem; justify-content: flex-end; white-space: nowrap; }
+/* Secondary row actions stay hidden until the row is hovered */
+.table .row-actions .btn { opacity: 0; transition: opacity 0.12s; }
+.table tr:hover .row-actions .btn,
+.table .row-actions .btn:focus-visible { opacity: 1; }
 .row-out-of-spec td { background: var(--danger-row); }
 
 /* ---------- Badges ---------- */
@@ -655,7 +678,17 @@ input:focus, select:focus {
   padding-top: 1.3rem;
   border-top: 1px dashed var(--border);
 }
-.day-footer .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.55rem 1.3rem; }
+.day-footer .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 1.3rem;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+}
+.day-footer .btn:hover { border-color: var(--border); background: var(--surface); color: var(--text); }
 .day-footer .btn svg { width: 15px; height: 15px; }
 .btn-lock { font-weight: 600; }
 .btn-lock:hover { border-color: var(--primary); color: var(--primary); }
@@ -822,18 +855,7 @@ input:focus, select:focus {
 .group-card:nth-of-type(3) { animation-delay: 0.1s; }
 .group-card:nth-of-type(4) { animation-delay: 0.15s; }
 .group-card:nth-of-type(5) { animation-delay: 0.2s; }
-.group-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
-.group-card { position: relative; }
-.group-card::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  background: linear-gradient(180deg, #3b82f6, #7c3aed);
-  z-index: 1;
-}
+.group-card:hover { box-shadow: var(--shadow-lg); }
 
 .prod-avatar {
   width: 30px;
@@ -929,6 +951,18 @@ input:focus, select:focus {
 .btn-add { color: var(--primary); border-color: var(--primary-border); font-weight: 600; }
 .btn-add:hover { background: var(--primary); border-color: var(--primary); color: #fff; }
 .group-empty { padding: 0.9rem 1.25rem; margin: 0; font-size: 0.88rem; }
+/* Destructive / secondary lot-header actions only appear when hovering the header */
+.group-card-head .btn-danger,
+.group-card-head .btn-icon { opacity: 0; transition: opacity 0.12s; }
+.group-card-head:hover .btn-danger,
+.group-card-head:hover .btn-icon,
+.group-card-head .btn-danger:focus-visible,
+.group-card-head .btn-icon:focus-visible { opacity: 1; }
+/* Line rename/delete only appear when hovering the title row */
+.line-action { opacity: 0; transition: opacity 0.12s; }
+.line-title:hover .line-action,
+.line-action:focus-visible { opacity: 1; }
+.status-ok { color: var(--ok); font-weight: 700; }
 
 /* Grid table inside a lote block */
 .table-scroll { overflow-x: auto; }

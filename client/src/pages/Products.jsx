@@ -64,10 +64,7 @@ export default function Products() {
   return (
     <div>
       <div className="page-head">
-        <div>
-          <h1>Productos</h1>
-          <p className="muted page-sub">Catálogo de artículos y sus especificaciones de análisis</p>
-        </div>
+        <h1>Productos</h1>
         {isAdmin && <button className="btn btn-primary" onClick={startCreate}>+ Crear producto</button>}
       </div>
 

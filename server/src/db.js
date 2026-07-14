@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const db = new Database(path.join(__dirname, '..', 'qc.db'));
+const db = new Database(process.env.DB_PATH || path.join(__dirname, '..', 'qc.db'));
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');

@@ -3,7 +3,9 @@ import cors from 'cors';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import db from './db.js';
+import { seedDemoData } from './demoSeed.js';
 import { requireAuth, requireAdmin } from './auth.js';
 import lotRoutes from './routes/lotRoutes.js';
 import authRoutes from './routes/authRoutes.js';
@@ -14,9 +16,16 @@ import resultRoutes from './routes/resultRoutes.js';
 import alertRoutes from './routes/alertRoutes.js';
 import dailyRoutes from './routes/dailyRoutes.js';
 
+seedDemoData();
+
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Lets the client know it is running against the public demo
+app.get('/api/meta', (req, res) => {
+  res.json({ demo: process.env.DEMO_MODE === '1' });
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', requireAuth, productRoutes);
@@ -40,6 +49,16 @@ app.get('/api/backup', requireAuth, requireAdmin, async (req, res, next) => {
     next(e);
   }
 });
+
+// In production the same server ships the built frontend (client/dist)
+const distDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'client', 'dist');
+if (fs.existsSync(distDir)) {
+  app.use(express.static(distDir));
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(distDir, 'index.html')); // SPA fallback
+  });
+}
 
 app.use((req, res) => res.status(404).json({ error: 'Ruta no encontrada' }));
 

@@ -576,7 +576,7 @@ export default function DailyLog() {
             )}
           </button>
           {view === 'sheet' && data && (
-            <button className="btn" onClick={exportCsv} title="Exportar la hoja completa del día a CSV (Excel)">
+            <button className="btn btn-ghost" onClick={exportCsv} title="Exportar la hoja completa del día a CSV (Excel)">
               Exportar
             </button>
           )}
@@ -677,7 +677,7 @@ export default function DailyLog() {
           <div className="line-title">
             <h2>{activeLine ? `Línea ${activeLine}` : 'Sin línea'}</h2>
             <button
-              className="btn btn-small"
+              className="btn btn-small btn-ghost line-action"
               disabled={locked}
               onClick={renameLine}
               title={activeLine ? 'Cambiar el nombre de la línea (se aplica a sus muestras del día)' : 'Asignar estas muestras a una línea'}
@@ -685,20 +685,16 @@ export default function DailyLog() {
               {activeLine ? 'Renombrar' : 'Asignar línea'}
             </button>
             <button
-              className="btn btn-small btn-danger"
+              className="btn btn-small btn-ghost btn-danger line-action"
               disabled={locked}
               onClick={deleteLine}
               title={visibleSamples.length > 0 ? 'Elimina la línea con sus muestras del día' : 'Quitar esta línea'}
             >
               Eliminar línea
             </button>
-            {visibleSamples.length > 0 && (
+            {outOfSpecCount > 0 && (
               <div className="chip-row">
-                {outOfSpecCount > 0 ? (
-                  <span className="chip chip-danger"><strong>{outOfSpecCount}</strong> fuera de especificación</span>
-                ) : (
-                  <span className="chip chip-ok">Todo conforme</span>
-                )}
+                <span className="chip chip-danger"><strong>{outOfSpecCount}</strong> fuera de especificación</span>
               </div>
             )}
           </div>
@@ -708,9 +704,6 @@ export default function DailyLog() {
               <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
                 + Añadir producto
               </button>
-              <span className="muted new-lote-hint">
-                Para más muestras de un lote ya en marcha, usa «+ muestra» en su bloque.
-              </span>
             </div>
           )}
 
@@ -906,12 +899,12 @@ export default function DailyLog() {
                                 <td className="col-status">
                                   {hasOut ? (
                                     <span className="badge badge-alert">Fuera</span>
-                                  ) : values.length === 0 ? (
-                                    <span className="muted">—</span>
                                   ) : complete ? (
-                                    <span className="badge badge-ok">Completa</span>
+                                    <span className="status-ok" title="Completa y conforme">✓</span>
+                                  ) : values.length > 0 ? (
+                                    <span className="muted" title="Faltan análisis">parcial</span>
                                   ) : (
-                                    <span className="badge badge-in_analysis">Parcial</span>
+                                    <span className="muted">—</span>
                                   )}
                                 </td>
                                 <td className="row-actions">
@@ -962,13 +955,6 @@ export default function DailyLog() {
                 </section>
               );
             })
-          )}
-
-          {visibleSamples.length > 0 && (
-            <p className="muted hint">
-              Los valores se guardan solos al salir de la celda; Enter o ↓/↑ recorren la columna. Pasa el ratón por
-              una celda para ver su rango. Las celdas rojas están fuera de especificación y generan alerta.
-            </p>
           )}
 
           <div className="day-footer">

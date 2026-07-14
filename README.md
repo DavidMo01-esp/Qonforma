@@ -1,64 +1,89 @@
+<div align="center">
+
+<img src="client/public/icon.png" alt="QONFORMA" width="90" />
+
 # QONFORMA
 
-Aplicación de control de calidad: registro diario de muestras por líneas de producción y lotes, resultados de análisis y alertas automáticas cuando un valor queda fuera de especificación.
+**Control de calidad de planta, pensado para el trabajo del día a día.**
 
-**Stack:** React (Vite) · Express · SQLite (better-sqlite3) · JWT
+Registro diario tipo hoja de cálculo por líneas de producción y lotes · alertas automáticas
+fuera de especificación · trazabilidad completa de lote · tendencias por parámetro
 
-## Puesta en marcha
+**[▶ Demo en vivo](https://qonforma.onrender.com)** — entra con `demo` / `demo1234`
+*(plan gratuito: la primera carga puede tardar ~1 minuto en despertar)*
 
-Terminal 1 — API (puerto 3001):
+</div>
+
+---
+
+## Qué hace
+
+QONFORMA replica el flujo real de un laboratorio de control de calidad en planta:
+
+- **Registro diario como una hoja de cálculo**: cada día es una hoja organizada en pestañas por
+  **línea de producción**, con bloques por **lote**. Cada fila es una muestra (hora + nº de envase)
+  y cada columna un análisis del producto. Los valores se guardan al salir de la celda; Enter y ↓/↑
+  recorren la columna como en Excel.
+- **Validación instantánea contra especificaciones**: cada producto (con su código de artículo)
+  define sus análisis con rangos mín/máx. Un valor fuera de rango pinta la celda en rojo y
+  **genera una alerta automáticamente**; si se corrige, la alerta desaparece sola.
+- **Alertas con acción correctiva**: al resolver una alerta se registra qué se hizo, y queda
+  asociada al lote y nº de envase.
+- **Trazabilidad de lote**: los lotes no se repiten — un buscador global lleva al día del lote
+  (con su bloque resaltado) y su ficha reúne todas las muestras, medias, analistas y alertas.
+- **Cierre de día**: la hoja se cierra con un candado y queda de solo lectura (el servidor rechaza
+  cualquier edición); solo un administrador puede reabrirla.
+- **Tendencias por parámetro**: gráficas de evolución con la zona de especificación sombreada,
+  para detectar derivas antes de salirse de rango.
+- **Extras de uso real**: exportación del día a CSV (Excel), medias por lote, roles
+  administrador/analista, copia de seguridad de la base de datos descargable, modo oscuro,
+  menú plegable y numeración automática de envases.
+
+## Stack
+
+| Capa | Tecnología |
+|---|---|
+| Frontend | React 18 + Vite, React Router, CSS propio (variables, tema claro/oscuro) |
+| Backend | Node.js + Express |
+| Base de datos | SQLite (better-sqlite3) con migraciones automáticas al arrancar |
+| Autenticación | JWT + bcrypt, roles admin/analista |
+| Despliegue | Render (blueprint `render.yaml`); el servidor Express sirve el build del cliente |
+
+Sin ORM y sin librería de gráficas: SQL directo y SVG dibujado a mano.
+
+## Ejecutar en local
 
 ```bash
-cd server
-npm install
-npm run dev
+# Terminal 1 — API (puerto 3001)
+cd server && npm install && npm run dev
+
+# Terminal 2 — Frontend con recarga (puerto 5173, proxy al API)
+cd client && npm install && npm run dev
 ```
 
-Terminal 2 — Frontend (puerto 5173, con proxy a la API):
+Abre http://localhost:5173. En el primer arranque se crea un usuario administrador:
+define `ADMIN_USER` / `ADMIN_PASSWORD`, o mira la contraseña generada en la consola del servidor.
+
+Con `DEMO_MODE=1` la base de datos vacía se puebla con datos de ejemplo (3 productos,
+3 días de registros, alertas y un día cerrado).
+
+### Modo producción (una sola pieza)
 
 ```bash
-cd client
-npm install
-npm run dev
+npm run build   # compila el cliente e instala dependencias del servidor
+npm start       # Express sirve el API y el frontend en el mismo puerto
 ```
 
-Abre http://localhost:5173
+Variables de entorno: `PORT`, `JWT_SECRET`, `DB_PATH`, `ADMIN_USER`, `ADMIN_PASSWORD`, `DEMO_MODE`.
 
-**Acceso:** en el primer arranque se crea un usuario administrador. Puedes definir sus credenciales con las variables de entorno `ADMIN_USER` y `ADMIN_PASSWORD`; si no las defines, se genera una contraseña aleatoria que se muestra una única vez en la consola del servidor. La contraseña se puede cambiar después desde la propia app (menú lateral → «Cambiar contraseña»), y también puedes crear más cuentas desde la pantalla de login.
+## Desplegar en Render
 
-## Cómo funciona
-
-0. **Registro diario** (página de inicio): una hoja tipo Excel por día, con las muestras **agrupadas por producto + lote**. Cada grupo tiene una banda con el producto y el lote (ambos editables desde la banda; renombrar el lote o cambiar el producto afecta a todas sus muestras) y un botón «+ muestra» que añade la siguiente toma del lote con la hora actual. Cada fila tiene código automático (`M-AAAAMMDD-NN`), hora editable y una celda por análisis: las columnas son la unión de los análisis de los productos presentes ese día, cada celda aplica el rango del producto de su fila (visible al pasar el ratón), las grises no aplican y las rojas están fuera de especificación (generan alerta). Los valores se guardan al salir de la celda y Enter/↓/↑ se mueven por la columna. Al cambiar el producto de un lote con resultados, se conservan y re-evalúan los análisis con el mismo nombre y se eliminan los demás.
-1. **Productos**: crea un producto y, dentro de él, define las especificaciones de sus análisis (parámetro, unidad, rango mínimo/máximo).
-2. **Muestras**: registra muestras con código único, producto (seleccionado de la lista), lote y estado (pendiente, en análisis, aprobada, rechazada).
-3. **Resultados**: dentro de cada muestra, registra el valor medido para uno de los análisis definidos en su producto. El servidor lo evalúa contra el rango:
-   - Dentro de rango → resultado *conforme*.
-   - Fuera de rango → resultado *fuera de especificación* y se **crea una alerta automáticamente**. Si luego corriges el resultado a un valor conforme, la alerta se elimina.
-4. **Alertas**: listado de alertas abiertas/resueltas, con opción de resolver, reabrir o eliminar.
+El repo incluye un blueprint: en Render, **New → Blueprint**, apunta a este repositorio y listo.
+Compila el cliente, arranca el servidor con datos de demostración y expone la app en una URL pública.
 
 ## API
 
-Todas las rutas (salvo `/api/auth/*`) requieren cabecera `Authorization: Bearer <token>`.
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| POST | `/api/auth/register` | Crear usuario |
-| POST | `/api/auth/login` | Iniciar sesión (devuelve JWT) |
-| GET | `/api/auth/me` | Usuario actual |
-| GET/POST | `/api/products` | Listar / crear productos |
-| GET/PUT/DELETE | `/api/products/:id` | Detalle (incluye especificaciones) / editar / borrar |
-| GET/POST | `/api/samples` | Listar (filtros `status`, `q`, `product_id`) / crear muestras |
-| GET/PUT/DELETE | `/api/samples/:id` | Detalle (incluye resultados) / editar / borrar |
-| GET/POST | `/api/specifications` | Listar (filtro `product_id`) / crear especificaciones |
-| GET/PUT/DELETE | `/api/specifications/:id` | Detalle / editar / borrar |
-| GET/POST | `/api/results` | Listar (filtros `sample_id`, `status`) / crear resultados |
-| GET/PUT/DELETE | `/api/results/:id` | Detalle / editar / borrar |
-| GET | `/api/alerts` | Listar alertas (filtro `status`) |
-| PATCH | `/api/alerts/:id/resolve` | Resolver alerta |
-| PATCH | `/api/alerts/:id/reopen` | Reabrir alerta |
-| DELETE | `/api/alerts/:id` | Eliminar alerta |
-| GET | `/api/daily` | Hoja diaria: productos con especificaciones y muestras del día con resultados (`date`) |
-
-La base de datos se guarda en `server/qc.db` (se crea sola al arrancar).
-
-En producción define la variable de entorno `JWT_SECRET` con un valor secreto propio.
+REST bajo `/api`, protegido con JWT salvo el login/registro. Recursos: `products`
+(con especificaciones y tendencias), `samples`, `results`, `alerts` (resolver/reabrir con nota),
+`daily` (hoja del día, días con registros, cierre de día), `lots/:batch` (trazabilidad)
+y `backup` (solo admin).

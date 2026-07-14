@@ -160,7 +160,7 @@ function Layout({ user, onLogout, theme, onToggleTheme, children }) {
           </svg>
         </button>
         <div className="brand">
-          <span className="brand-mark">Q</span>
+          <img src="/icon.png" alt="" className="brand-mark brand-img" />
           <div className="brand-block">
             <span className="brand-text">QONFORMA</span>
             <span className="brand-sub">Control de calidad</span>

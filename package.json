@@ -1,0 +1,15 @@
+{
+  "name": "qonforma",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Aplicación de control de calidad: registro diario por líneas y lotes, especificaciones por producto y alertas automáticas.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "cd client && npm install && npm run build && cd ../server && npm install",
+    "start": "node server/src/index.js",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev"
+  }
+}

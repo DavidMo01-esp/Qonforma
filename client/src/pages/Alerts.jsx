@@ -48,10 +48,7 @@ export default function Alerts() {
   return (
     <div>
       <div className="page-head">
-        <div>
-          <h1>Alertas</h1>
-          <p className="muted page-sub">Resultados fuera de especificación y su seguimiento</p>
-        </div>
+        <h1>Alertas</h1>
         <select value={filter} onChange={(e) => setFilter(e.target.value)}>
           <option value="open">Abiertas</option>
           <option value="resolved">Resueltas</option>
